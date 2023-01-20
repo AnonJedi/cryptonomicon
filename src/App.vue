@@ -101,7 +101,7 @@
             :class="{
               'border-4': selectedTicker === t,
             }"
-            @click="selectedTicker = t"
+            @click="selectTicker(t)"
             class="bg-white overflow-hidden shadow rounded-lg border-purple-800 border-solid cursor-pointer"
           >
             <div class="px-4 py-5 sm:p-6 text-center">
@@ -140,10 +140,12 @@
           {{ selectedTicker.name }} - USD
         </h3>
         <div class="flex items-end border-gray-600 border-b border-l h-64">
-          <div class="bg-purple-800 border w-10 h-24"></div>
-          <div class="bg-purple-800 border w-10 h-32"></div>
-          <div class="bg-purple-800 border w-10 h-48"></div>
-          <div class="bg-purple-800 border w-10 h-16"></div>
+          <div
+            v-for="(bar, i) in normalizedGraph()"
+            :key="i"
+            :style="{ height: `${bar}%` }"
+            class="bg-purple-800 border w-10"
+          ></div>
         </div>
         <button
           @click="selectedTicker = null"
@@ -186,6 +188,7 @@ export default {
       ticker: null,
       tickers: [],
       selectedTicker: null,
+      graph: [],
     };
   },
 
@@ -202,6 +205,10 @@ export default {
         const ticker = this.tickers.find((t) => t.name === tickerName);
         if (!ticker) {
           return;
+        }
+
+        if (ticker.name === tickerName) {
+          this.graph.push(price.USD);
         }
 
         ticker.price =
@@ -230,6 +237,17 @@ export default {
         }
         return true;
       });
+    },
+
+    normalizedGraph() {
+      const max = Math.max(...this.graph);
+      const min = Math.min(...this.graph);
+      return this.graph.map((price) => (5 + (price - min) * 95) / (max - min));
+    },
+
+    selectTicker(ticker) {
+      this.selectedTicker = ticker;
+      this.graph = [];
     },
   },
 };
