@@ -637,7 +637,7 @@ select {
   background-repeat: no-repeat;
   background-size: 1.5em 1.5em;
   padding-right: 2.5rem;
-  color-adjust: exact;
+  print-color-adjust: exact;
 }
 
 [multiple] {
@@ -646,7 +646,7 @@ select {
   background-repeat: unset;
   background-size: initial;
   padding-right: 0.75rem;
-  color-adjust: unset;
+  print-color-adjust: unset;
 }
 
 
@@ -655,7 +655,7 @@ select {
      {
   appearance: none;
   padding: 0;
-  color-adjust: exact;
+  print-color-adjust: exact;
   display: inline-block;
   vertical-align: middle;
   background-origin: border-box;

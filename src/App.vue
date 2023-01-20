@@ -200,7 +200,12 @@ export default {
         const price = await req.json();
 
         const ticker = this.tickers.find((t) => t.name === tickerName);
-        ticker.price = price.USD;
+        if (!ticker) {
+          return;
+        }
+
+        ticker.price =
+          price.USD > 1 ? price.USD.toFixed(2) : price.USD.toPrecision(2);
       }, 3000);
 
       const newTicker = {
