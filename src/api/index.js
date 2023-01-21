@@ -1,13 +1,62 @@
-const subscriptions = new Map();
+const AGGREGATE_MESSAGE_TYPE = "5";
 
-window.subscriptions = subscriptions;
+const subscriptions = new Map();
+let socket;
+
+export function startPriceUpdating() {
+  const wsURL = new URL("wss://streamer.cryptocompare.com/v2");
+  wsURL.searchParams.append("api_key", process.env.VUE_APP_API_KEY);
+
+  socket = new WebSocket(wsURL);
+
+  socket.addEventListener(
+    "open",
+    () => {
+      const tickerNames = [...subscriptions.keys()];
+      socket?.send(
+        JSON.stringify({
+          action: "SubAdd",
+          subs: tickerNames.map((t) => `5~CCCAGG~${t}~USD`),
+        })
+      );
+    },
+    {
+      once: true,
+    }
+  );
+
+  socket.addEventListener("message", (event) => {
+    const data = JSON.parse(event.data);
+
+    const { FROMSYMBOL: ticker, PRICE: price, TYPE: type } = data;
+
+    if (type !== AGGREGATE_MESSAGE_TYPE || !price) {
+      return;
+    }
+    subscriptions.get(ticker)?.forEach((cb) => cb(ticker, price));
+  });
+}
 
 export function subscribeToTickerUpdate(tickerName, cb) {
+  socket?.send(
+    JSON.stringify({
+      action: "SubAdd",
+      subs: [`5~CCCAGG~${tickerName}~USD`],
+    })
+  );
+
   const callbacks = subscriptions.get(tickerName) ?? [];
   subscriptions.set(tickerName, [...callbacks, cb]);
 }
 
 export function unsubscribeFromTickerUpdate(tickerName, cb) {
+  socket?.send(
+    JSON.stringify({
+      action: "SubRemove",
+      subs: [`5~CCCAGG~${tickerName}~USD`],
+    })
+  );
+
   const callbacks = (subscriptions.get(tickerName) ?? []).filter(
     (c) => c !== cb
   );
@@ -20,45 +69,8 @@ export function unsubscribeFromTickerUpdate(tickerName, cb) {
   subscriptions.set(tickerName, callbacks);
 }
 
-function pollTickersPrices() {
-  const tickerNames = [...subscriptions.keys()];
-
-  if (!tickerNames.length) {
-    return;
-  }
-
-  const urlParams = new URLSearchParams({
-    fsyms: tickerNames.join(","),
-    tsyms: "USD",
-    api_key: process.env.VUE_APP_API_KEY,
-  });
-
-  return fetch(
-    `https://min-api.cryptocompare.com/data/pricemulti?${urlParams.toString()}`
-  )
-    .then((res) => res.json())
-    .then((pricesData) => {
-      tickerNames.forEach((t) => {
-        subscriptions.get(t).forEach((cb) => {
-          if (!pricesData[t]) {
-            return;
-          }
-          cb(t, pricesData[t].USD);
-        });
-      });
-    });
-}
-
-let POLLING_INTERVAL_ID;
-const POLLING_INTERVAL_MS = 3000;
-
-export function startPriceUpdating() {
-  pollTickersPrices();
-  POLLING_INTERVAL_ID = setInterval(pollTickersPrices, POLLING_INTERVAL_MS);
-}
-
 export function endPriceUpdating() {
-  clearInterval(POLLING_INTERVAL_ID);
+  socket?.close();
 }
 
 export function getListOfAvailableCoins() {
