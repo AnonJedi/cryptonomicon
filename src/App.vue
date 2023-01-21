@@ -250,7 +250,7 @@ export default {
     }
 
     const filterParams = new URLSearchParams(window.location.search);
-    this.filter = filterParams.get("filter");
+    this.filter = filterParams.get("filter") ?? "";
     const rawPage = parseInt(filterParams.get("page"));
     this.page = isNaN(rawPage) ? 1 : rawPage;
   },
