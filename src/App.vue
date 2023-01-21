@@ -128,7 +128,7 @@
             :class="{
               'border-4': selectedTicker === t,
             }"
-            @click="selectTicker(t)"
+            @click="selectedTicker = t"
             class="bg-white overflow-hidden shadow rounded-lg border-purple-800 border-solid cursor-pointer"
           >
             <div class="px-4 py-5 sm:p-6 text-center">
@@ -294,6 +294,16 @@ export default {
 
       history.pushState(null, "", url);
     },
+
+    paginatedTickers() {
+      if (this.paginatedTickers.length === 0 && this.page > 1) {
+        this.page -= 1;
+      }
+    },
+
+    selectedTicker() {
+      this.graph = [];
+    },
   },
 
   computed: {
@@ -401,11 +411,6 @@ export default {
         }
         return true;
       });
-    },
-
-    selectTicker(ticker) {
-      this.selectedTicker = ticker;
-      this.graph = [];
     },
 
     handleSuggestionClick(newCoin) {
