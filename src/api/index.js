@@ -40,6 +40,9 @@ function pollTickersPrices() {
     .then((pricesData) => {
       tickerNames.forEach((t) => {
         subscriptions.get(t).forEach((cb) => {
+          if (!pricesData[t]) {
+            return;
+          }
           cb(t, pricesData[t].USD);
         });
       });
