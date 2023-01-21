@@ -60,3 +60,15 @@ export function startPriceUpdating() {
 export function endPriceUpdating() {
   clearInterval(POLLING_INTERVAL_ID);
 }
+
+export function getListOfAvailableCoins() {
+  const params = new URLSearchParams({
+    api_key: process.env.VUE_APP_API_KEY,
+  });
+
+  return fetch(
+    `https://min-api.cryptocompare.com/data/all/coinlist?${params.toString()}`
+  )
+    .then((res) => res.json())
+    .then(({ Data }) => Data);
+}

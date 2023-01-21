@@ -214,6 +214,7 @@ import debounce from "lodash.debounce";
 
 import {
   endPriceUpdating,
+  getListOfAvailableCoins,
   startPriceUpdating,
   subscribeToTickerUpdate,
   unsubscribeFromTickerUpdate,
@@ -247,14 +248,15 @@ export default {
     if (restoredTickers) {
       this.tickers = JSON.parse(restoredTickers);
     }
+
+    const filterParams = new URLSearchParams(window.location.search);
+    this.filter = filterParams.get("filter");
+    const rawPage = parseInt(filterParams.get("page"));
+    this.page = isNaN(rawPage) ? 1 : rawPage;
   },
 
   async mounted() {
-    const req = await fetch(
-      `https://min-api.cryptocompare.com/data/all/coinlist?api_key=${process.env.VUE_APP_API_KEY}`
-    );
-    const data = await req.json();
-    this.availableCoins = data.Data;
+    this.availableCoins = await getListOfAvailableCoins();
     this.coinListLoading = false;
 
     startPriceUpdating();
@@ -283,6 +285,14 @@ export default {
 
     filter() {
       this.page = 1;
+    },
+
+    paramsToSave({ filter, page }) {
+      const url = new URL(window.location);
+      url.searchParams.set("filter", filter);
+      url.searchParams.set("page", page);
+
+      history.pushState(null, "", url);
     },
   },
 
@@ -317,6 +327,13 @@ export default {
         return this.graph.map(() => 50);
       }
       return this.graph.map((price) => (5 + (price - min) * 95) / (max - min));
+    },
+
+    paramsToSave() {
+      return {
+        filter: this.filter,
+        page: this.page,
+      };
     },
   },
 
