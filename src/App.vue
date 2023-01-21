@@ -2,7 +2,7 @@
   <div class="container mx-auto flex flex-col items-center bg-gray-100 p-4">
     <div
       class="fixed w-100 h-100 opacity-80 bg-purple-800 inset-0 z-50 flex items-center justify-center"
-      v-if="false"
+      v-if="coinListLoading"
     >
       <svg
         class="animate-spin -ml-1 mr-3 h-12 w-12 text-white"
@@ -36,6 +36,8 @@
               <input
                 v-model="ticker"
                 @keydown.enter="addNew"
+                @keydown="searchError = undefined"
+                @input="debouncedHandleSearchChange"
                 type="text"
                 name="wallet"
                 id="wallet"
@@ -43,29 +45,22 @@
                 placeholder="Например DOGE"
               />
             </div>
-            <div class="flex bg-white p-1 rounded-md shadow-md flex-wrap">
+            <div
+              v-if="suggestions.length"
+              class="flex bg-white p-1 rounded-md shadow-md flex-wrap"
+            >
               <span
+                v-for="s in suggestions"
+                :key="s.symbol"
+                @click="handleSuggestionClick(s)"
                 class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer"
               >
-                BTC
-              </span>
-              <span
-                class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer"
-              >
-                DOGE
-              </span>
-              <span
-                class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer"
-              >
-                BCH
-              </span>
-              <span
-                class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer"
-              >
-                CHD
+                {{ s.Symbol }}
               </span>
             </div>
-            <div class="text-sm text-red-600">Такой тикер уже добавлен</div>
+            <div v-if="searchError" class="text-sm text-red-600">
+              {{ searchError }}
+            </div>
           </div>
         </div>
         <button
@@ -73,7 +68,6 @@
           type="button"
           class="my-4 inline-flex items-center py-2 px-4 border border-transparent shadow-sm text-sm leading-4 font-medium rounded-full text-white bg-gray-600 hover:bg-gray-700 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
         >
-          <!-- Heroicon name: solid/mail -->
           <svg
             class="-ml-0.5 mr-2 h-6 w-6"
             xmlns="http://www.w3.org/2000/svg"
@@ -104,7 +98,7 @@
           >
             <div class="px-4 py-5 sm:p-6 text-center">
               <dt class="text-sm font-medium text-gray-500 truncate">
-                {{ t.name }} - USD
+                {{ t.Symbol }} - USD
               </dt>
               <dd class="mt-1 text-3xl font-semibold text-gray-900">
                 {{ t.price }}
@@ -135,7 +129,7 @@
       </template>
       <section v-if="selectedTicker" class="relative">
         <h3 class="text-lg leading-6 font-medium text-gray-900 my-8">
-          {{ selectedTicker.name }} - USD
+          {{ selectedTicker.Symbol }} - USD
         </h3>
         <div class="flex items-end border-gray-600 border-b border-l h-64">
           <div
@@ -178,6 +172,8 @@
 </template>
 
 <script>
+import debounce from "lodash.debounce";
+
 export default {
   name: "App",
 
@@ -187,12 +183,46 @@ export default {
       tickers: [],
       selectedTicker: null,
       graph: [],
+      coinListLoading: true,
+      availableCoins: [],
+      suggestions: [],
+      searchError: undefined,
     };
+  },
+
+  created() {
+    this.debouncedHandleSearchChange = debounce(this.handleSearchChange, 300);
+  },
+
+  async mounted() {
+    const req = await fetch(
+      `https://min-api.cryptocompare.com/data/all/coinlist?api_key=${process.env.VUE_APP_API_KEY}`
+    );
+    const data = await req.json();
+    this.availableCoins = data.Data;
+    this.coinListLoading = false;
   },
 
   methods: {
     addNew() {
-      const tickerName = this.ticker;
+      const tickerName = this.ticker?.toUpperCase();
+
+      if (!tickerName) {
+        return;
+      }
+
+      const coinFromBase = this.availableCoins[tickerName];
+
+      if (!coinFromBase) {
+        this.searchError = "Тикер не найден в списке доступных";
+        return;
+      }
+
+      if (this.tickers.some((t) => t.Symbol === coinFromBase.Symbol)) {
+        this.handleSearchChange();
+        this.searchError = "Такой тикер уже добавлен";
+        return;
+      }
 
       const pollRequestId = setInterval(async () => {
         const req = await fetch(
@@ -200,12 +230,12 @@ export default {
         );
         const price = await req.json();
 
-        const ticker = this.tickers.find((t) => t.name === tickerName);
+        const ticker = this.tickers.find((t) => t.Symbol === tickerName);
         if (!ticker) {
           return;
         }
 
-        if (ticker.name === tickerName) {
+        if (ticker.Symbol === tickerName) {
           this.graph.push(price.USD);
         }
 
@@ -214,13 +244,14 @@ export default {
       }, 3000);
 
       const newTicker = {
-        name: tickerName,
+        ...coinFromBase,
         price: "-",
         pollRequestId,
       };
 
       this.tickers.push(newTicker);
       this.ticker = null;
+      this.suggestions = [];
     },
 
     deleteTicker(tickerToRemove) {
@@ -246,6 +277,49 @@ export default {
     selectTicker(ticker) {
       this.selectedTicker = ticker;
       this.graph = [];
+    },
+
+    handleSuggestionClick(newCoin) {
+      this.ticker = newCoin.Symbol;
+      this.addNew();
+    },
+
+    handleSearchChange() {
+      this.searchError = undefined;
+      const value = this.ticker.toUpperCase();
+
+      if (!value) {
+        this.suggestions = [];
+        return;
+      }
+
+      const fullMatch = [];
+      const startsWith = [];
+      const partialMatch = [];
+
+      Object.values(this.availableCoins).forEach((c) => {
+        if (c.Symbol === value) {
+          fullMatch.push(c);
+          return;
+        }
+
+        if (c.Symbol.startsWith(value)) {
+          startsWith.push(c);
+          return;
+        }
+
+        if (
+          c.Symbol.includes(value) ||
+          c.FullName.toUpperCase().includes(value)
+        ) {
+          partialMatch.push(c);
+        }
+      });
+
+      this.suggestions = [...fullMatch, ...startsWith, ...partialMatch].slice(
+        0,
+        4
+      );
     },
   },
 };
