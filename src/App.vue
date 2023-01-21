@@ -127,9 +127,11 @@
             :key="t.Symbol"
             :class="{
               'border-4': selectedTicker === t,
+              'bg-red-100': t.notFound,
+              'bg-white': !t.notFound,
             }"
             @click="selectedTicker = t"
-            class="bg-white overflow-hidden shadow rounded-lg border-purple-800 border-solid cursor-pointer"
+            class="overflow-hidden shadow rounded-lg border-purple-800 border-solid cursor-pointer"
           >
             <div class="px-4 py-5 sm:p-6 text-center">
               <dt class="text-sm font-medium text-gray-500 truncate">
@@ -213,9 +215,9 @@
 import debounce from "lodash.debounce";
 
 import {
-  endPriceUpdating,
-  getListOfAvailableCoins,
-  startPriceUpdating,
+  stopUpdatingPrices,
+  getListOfAvailableSymbols,
+  startUpdatingPrices,
   subscribeToTickerUpdate,
   unsubscribeFromTickerUpdate,
 } from "./api";
@@ -256,10 +258,10 @@ export default {
   },
 
   async mounted() {
-    this.availableCoins = await getListOfAvailableCoins();
+    this.availableCoins = await getListOfAvailableSymbols();
     this.coinListLoading = false;
 
-    startPriceUpdating();
+    startUpdatingPrices();
   },
 
   beforeUnmount() {
@@ -267,20 +269,12 @@ export default {
       unsubscribeFromTickerUpdate(Symbol, this.updatePriceForTicker);
     });
 
-    endPriceUpdating();
+    stopUpdatingPrices();
   },
 
   watch: {
-    tickers(newTickers, prevTickers) {
+    tickers() {
       localStorage.setItem(LS_RESTORE_KEY, JSON.stringify(this.tickers));
-
-      prevTickers.forEach(({ Symbol }) => {
-        unsubscribeFromTickerUpdate(Symbol, this.updatePriceForTicker);
-      });
-
-      newTickers.forEach(({ Symbol }) => {
-        subscribeToTickerUpdate(Symbol, this.updatePriceForTicker);
-      });
     },
 
     filter() {
@@ -348,7 +342,7 @@ export default {
   },
 
   methods: {
-    updatePriceForTicker(tickerName, price) {
+    updatePriceForTicker(tickerName, price, notFound = false) {
       const tickerToUpdate = this.tickers.find((t) => t.Symbol === tickerName);
       if (!tickerToUpdate) {
         return;
@@ -359,6 +353,7 @@ export default {
       }
 
       tickerToUpdate.price = price;
+      tickerToUpdate.notFound = notFound;
     },
 
     addNew() {
@@ -368,25 +363,18 @@ export default {
         return;
       }
 
-      const coinFromBase =
-        this.availableCoins[tickerName] ?? this.suggestions[0];
-
-      if (!coinFromBase) {
-        this.searchError = "Тикер не найден в списке доступных";
-        return;
-      }
-
-      if (this.tickers.some((t) => t.Symbol === coinFromBase.Symbol)) {
+      if (this.tickers.some((t) => t.Symbol === tickerName)) {
         this.handleSearchChange();
         this.searchError = "Такой тикер уже добавлен";
         return;
       }
 
       const newTicker = {
-        ...coinFromBase,
+        Symbol: tickerName,
         price: "-",
       };
 
+      subscribeToTickerUpdate(tickerName, this.updatePriceForTicker);
       this.tickers = [...this.tickers, newTicker];
       this.ticker = null;
       this.suggestions = [];
@@ -394,7 +382,7 @@ export default {
 
     formatPrice(price) {
       if (typeof price !== "number") {
-        return price;
+        return "-";
       }
       return price > 1 ? price.toFixed(2) : price.toPrecision(2);
     },
@@ -411,6 +399,11 @@ export default {
         }
         return true;
       });
+
+      unsubscribeFromTickerUpdate(
+        tickerToRemove.Symbol,
+        this.updatePriceForTicker
+      );
     },
 
     handleSuggestionClick(newCoin) {
