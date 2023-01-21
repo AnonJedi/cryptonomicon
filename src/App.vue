@@ -35,8 +35,8 @@
             <div class="mt-1 relative rounded-md shadow-md">
               <input
                 v-model="ticker"
-                @keydown.enter="addNew"
                 @keydown="searchError = undefined"
+                @keydown.enter="addNew"
                 @input="debouncedHandleSearchChange"
                 type="text"
                 name="wallet"
@@ -89,7 +89,7 @@
         <dl class="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-3">
           <div
             v-for="t in tickers"
-            :key="t"
+            :key="t.Symbol"
             :class="{
               'border-4': selectedTicker === t,
             }"
@@ -101,7 +101,7 @@
                 {{ t.Symbol }} - USD
               </dt>
               <dd class="mt-1 text-3xl font-semibold text-gray-900">
-                {{ t.price }}
+                {{ formatPrice(t.price) }}
               </dd>
             </div>
             <div class="w-full border-t border-gray-200"></div>
@@ -133,7 +133,7 @@
         </h3>
         <div class="flex items-end border-gray-600 border-b border-l h-64">
           <div
-            v-for="(bar, i) in normalizedGraph()"
+            v-for="(bar, i) in normalizedGraph"
             :key="i"
             :style="{ height: `${bar}%` }"
             class="bg-purple-800 border w-10"
@@ -174,6 +174,15 @@
 <script>
 import debounce from "lodash.debounce";
 
+import {
+  endPriceUpdating,
+  startPriceUpdating,
+  subscribeToTickerUpdate,
+  unsubscribeFromTickerUpdate,
+} from "./api";
+
+const LS_RESTORE_KEY = "cryptonomicon-tickers";
+
 export default {
   name: "App",
 
@@ -192,6 +201,11 @@ export default {
 
   created() {
     this.debouncedHandleSearchChange = debounce(this.handleSearchChange, 300);
+
+    const restoredTickers = localStorage.getItem(LS_RESTORE_KEY);
+    if (restoredTickers) {
+      this.tickers = JSON.parse(restoredTickers);
+    }
   },
 
   async mounted() {
@@ -201,17 +215,67 @@ export default {
     const data = await req.json();
     this.availableCoins = data.Data;
     this.coinListLoading = false;
+
+    startPriceUpdating();
+  },
+
+  beforeUnmount() {
+    this.tickers.forEach(({ Symbol }) => {
+      unsubscribeFromTickerUpdate(Symbol, this.updatePriceForTicker);
+    });
+
+    endPriceUpdating();
+  },
+
+  watch: {
+    tickers(newTickers, prevTickers) {
+      localStorage.setItem(LS_RESTORE_KEY, JSON.stringify(this.tickers));
+
+      prevTickers.forEach(({ Symbol }) => {
+        unsubscribeFromTickerUpdate(Symbol, this.updatePriceForTicker);
+      });
+
+      newTickers.forEach(({ Symbol }) => {
+        subscribeToTickerUpdate(Symbol, this.updatePriceForTicker);
+      });
+    },
+  },
+
+  computed: {
+    normalizedGraph() {
+      const max = Math.max(...this.graph);
+      const min = Math.min(...this.graph);
+
+      if (max === min) {
+        return this.graph.map(() => 50);
+      }
+      return this.graph.map((price) => (5 + (price - min) * 95) / (max - min));
+    },
   },
 
   methods: {
+    updatePriceForTicker(tickerName, price) {
+      const tickerToUpdate = this.tickers.find((t) => t.Symbol === tickerName);
+      if (!tickerToUpdate) {
+        return;
+      }
+
+      if (this.selectedTicker?.Symbol === tickerName) {
+        this.graph.push(price);
+      }
+
+      tickerToUpdate.price = price;
+    },
+
     addNew() {
-      const tickerName = this.ticker?.toUpperCase();
+      const tickerName = this.ticker?.toUpperCase().trim();
 
       if (!tickerName) {
         return;
       }
 
-      const coinFromBase = this.availableCoins[tickerName];
+      const coinFromBase =
+        this.availableCoins[tickerName] ?? this.suggestions[0];
 
       if (!coinFromBase) {
         this.searchError = "Тикер не найден в списке доступных";
@@ -224,34 +288,21 @@ export default {
         return;
       }
 
-      const pollRequestId = setInterval(async () => {
-        const req = await fetch(
-          `https://min-api.cryptocompare.com/data/price?fsym=${tickerName}&tsyms=USD&api_key=${process.env.VUE_APP_API_KEY}`
-        );
-        const price = await req.json();
-
-        const ticker = this.tickers.find((t) => t.Symbol === tickerName);
-        if (!ticker) {
-          return;
-        }
-
-        if (ticker.Symbol === tickerName) {
-          this.graph.push(price.USD);
-        }
-
-        ticker.price =
-          price.USD > 1 ? price.USD.toFixed(2) : price.USD.toPrecision(2);
-      }, 3000);
-
       const newTicker = {
         ...coinFromBase,
         price: "-",
-        pollRequestId,
       };
 
-      this.tickers.push(newTicker);
+      this.tickers = [...this.tickers, newTicker];
       this.ticker = null;
       this.suggestions = [];
+    },
+
+    formatPrice(price) {
+      if (typeof price !== "number") {
+        return price;
+      }
+      return price > 1 ? price.toFixed(2) : price.toPrecision(2);
     },
 
     deleteTicker(tickerToRemove) {
@@ -266,12 +317,6 @@ export default {
         }
         return true;
       });
-    },
-
-    normalizedGraph() {
-      const max = Math.max(...this.graph);
-      const min = Math.min(...this.graph);
-      return this.graph.map((price) => (5 + (price - min) * 95) / (max - min));
     },
 
     selectTicker(ticker) {
