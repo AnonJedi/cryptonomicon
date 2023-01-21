@@ -3,28 +3,29 @@ const AGGREGATE_MESSAGE_TYPE = "5";
 const subscriptions = new Map();
 let socket;
 
-export function startPriceUpdating() {
-  const wsURL = new URL("wss://streamer.cryptocompare.com/v2");
-  wsURL.searchParams.append("api_key", process.env.VUE_APP_API_KEY);
+function sendMessageToWebSocket(message) {
+  const stringifiedMessage = JSON.stringify(message);
 
-  socket = new WebSocket(wsURL);
+  if (socket.readyState() === WebSocket.OPEN) {
+    socket.send(stringifiedMessage);
+  }
 
   socket.addEventListener(
     "open",
     () => {
-      const tickerNames = [...subscriptions.keys()];
-      socket?.send(
-        JSON.stringify({
-          action: "SubAdd",
-          subs: tickerNames.map((t) => `5~CCCAGG~${t}~USD`),
-        })
-      );
+      socket.send(stringifiedMessage);
     },
     {
       once: true,
     }
   );
+}
 
+export function startPriceUpdating() {
+  const wsURL = new URL("wss://streamer.cryptocompare.com/v2");
+  wsURL.searchParams.append("api_key", process.env.VUE_APP_API_KEY);
+
+  socket = new WebSocket(wsURL);
   socket.addEventListener("message", (event) => {
     const data = JSON.parse(event.data);
 
@@ -35,27 +36,28 @@ export function startPriceUpdating() {
     }
     subscriptions.get(ticker)?.forEach((cb) => cb(ticker, price));
   });
+
+  sendMessageToWebSocket({
+    action: "SubAdd",
+    subs: [...subscriptions.keys()].map((t) => `5~CCCAGG~${t}~USD`),
+  });
 }
 
 export function subscribeToTickerUpdate(tickerName, cb) {
-  socket?.send(
-    JSON.stringify({
-      action: "SubAdd",
-      subs: [`5~CCCAGG~${tickerName}~USD`],
-    })
-  );
+  sendMessageToWebSocket({
+    action: "SubAdd",
+    subs: [`5~CCCAGG~${tickerName}~USD`],
+  });
 
   const callbacks = subscriptions.get(tickerName) ?? [];
   subscriptions.set(tickerName, [...callbacks, cb]);
 }
 
 export function unsubscribeFromTickerUpdate(tickerName, cb) {
-  socket?.send(
-    JSON.stringify({
-      action: "SubRemove",
-      subs: [`5~CCCAGG~${tickerName}~USD`],
-    })
-  );
+  sendMessageToWebSocket({
+    action: "SubRemove",
+    subs: [`5~CCCAGG~${tickerName}~USD`],
+  });
 
   const callbacks = (subscriptions.get(tickerName) ?? []).filter(
     (c) => c !== cb
