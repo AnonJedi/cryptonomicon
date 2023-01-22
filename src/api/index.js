@@ -1,4 +1,10 @@
-import { INVALID_MESSAGE, SUCCESS_MESSAGE } from "./constants";
+import {
+  connectToChannel,
+  disconnectFromChannel,
+  sendDataToChannel,
+  subscribeToChannelMessage,
+} from "./broadcast-data";
+import { INVALID_MESSAGE, SOCKET_IS_BUSY, SUCCESS_MESSAGE } from "./constants";
 import {
   addSubscriptionToSymbols,
   closeConnection,
@@ -41,6 +47,13 @@ export function unsubscribeFromTickerUpdate(tickerName, cb) {
 }
 
 function handlePrice({ fromSymbol, toSymbol, price, type }) {
+  if (type === SOCKET_IS_BUSY) {
+    subscribeToChannelMessage(handlePrice);
+    return;
+  }
+
+  sendDataToChannel({ fromSymbol, toSymbol, price, type });
+
   if (type === SUCCESS_MESSAGE) {
     let finalPrice = price;
 
@@ -69,10 +82,12 @@ function handlePrice({ fromSymbol, toSymbol, price, type }) {
 export function startUpdatingPrices() {
   establishConnection(handlePrice);
   addSubscriptionToSymbols([...subscriptions.keys()], USD_SYMBOL);
+  connectToChannel();
 }
 
 export function stopUpdatingPrices() {
   closeConnection();
+  disconnectFromChannel();
 }
 
 export { getListOfAvailableSymbols } from "./transport";
