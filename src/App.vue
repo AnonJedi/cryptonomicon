@@ -249,6 +249,10 @@ export default {
     const restoredTickers = localStorage.getItem(LS_RESTORE_KEY);
     if (restoredTickers) {
       this.tickers = JSON.parse(restoredTickers);
+
+      this.tickers.forEach((t) => {
+        subscribeToTickerUpdate(t.Symbol, this.updatePriceForTicker);
+      });
     }
 
     const filterParams = new URLSearchParams(window.location.search);
