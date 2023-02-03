@@ -170,12 +170,16 @@
           <h3 class="text-lg leading-6 font-medium text-gray-900 my-8">
             {{ selectedTicker.Symbol }} - USD
           </h3>
-          <div class="flex items-end border-gray-600 border-b border-l h-64">
+          <div
+            ref="graph"
+            class="flex items-end border-gray-600 border-b border-l h-64 overflow-hidden"
+          >
             <div
-              v-for="(bar, i) in normalizedGraph"
-              :key="i"
-              :style="{ height: `${bar}%` }"
-              class="bg-purple-800 border w-10"
+              ref="graphElement"
+              v-for="{ price, id } in normalizedGraph"
+              :key="id"
+              :style="{ height: `${price}%` }"
+              class="bg-purple-800 border w-10 shrink-0"
             ></div>
           </div>
           <button
@@ -234,6 +238,7 @@ export default {
       tickers: [],
       selectedTicker: null,
       graph: [],
+      graphHistorySize: 1,
       coinListLoading: true,
       availableCoins: [],
       suggestions: [],
@@ -245,6 +250,10 @@ export default {
 
   created() {
     this.debouncedHandleSearchChange = debounce(this.handleSearchChange, 300);
+    this.debouncedCalculateGraphHistory = debounce(
+      this.calculateGraphHistorySize,
+      300
+    );
 
     const restoredTickers = localStorage.getItem(LS_RESTORE_KEY);
     if (restoredTickers) {
@@ -266,6 +275,14 @@ export default {
     this.coinListLoading = false;
 
     startUpdatingPrices();
+
+    window.addEventListener("resize", this.debouncedCalculateGraphHistory);
+  },
+
+  updated() {
+    if (this.graph.length === 1) {
+      this.calculateGraphHistorySize();
+    }
   },
 
   beforeUnmount() {
@@ -274,6 +291,7 @@ export default {
     });
 
     stopUpdatingPrices();
+    window.removeEventListener("resize", this.debouncedCalculateGraphHistory);
   },
 
   watch: {
@@ -328,13 +346,29 @@ export default {
     },
 
     normalizedGraph() {
-      const max = Math.max(...this.graph);
-      const min = Math.min(...this.graph);
+      let min = Number.MAX_VALUE;
+      let max = 0;
+      this.graph.forEach(({ price }) => {
+        if (min > price) {
+          min = price;
+        }
+
+        if (max < price) {
+          max = price;
+        }
+      });
 
       if (max === min) {
-        return this.graph.map(() => 50);
+        return this.graph
+          .slice(-1 * this.graphHistorySize)
+          .map(({ id }) => ({ price: 50, id }));
       }
-      return this.graph.map((price) => (5 + (price - min) * 95) / (max - min));
+      return this.graph
+        .slice(-1 * this.graphHistorySize)
+        .map(({ price, id }) => ({
+          price: (5 + (price - min) * 95) / (max - min),
+          id,
+        }));
     },
 
     paramsToSave() {
@@ -346,6 +380,17 @@ export default {
   },
 
   methods: {
+    calculateGraphHistorySize() {
+      let { graph, graphElement } = this.$refs;
+      if (!graph || !graphElement) {
+        return;
+      }
+
+      this.graphHistorySize = Math.floor(
+        graph.clientWidth / graphElement[0].offsetWidth
+      );
+    },
+
     updatePriceForTicker(tickerName, price, notFound = false) {
       const tickerToUpdate = this.tickers.find((t) => t.Symbol === tickerName);
       if (!tickerToUpdate) {
@@ -353,7 +398,13 @@ export default {
       }
 
       if (this.selectedTicker?.Symbol === tickerName) {
-        this.graph.push(price);
+        this.graph = [
+          ...this.graph,
+          {
+            price,
+            id: Date.now(),
+          },
+        ];
       }
 
       tickerToUpdate.price = price;
