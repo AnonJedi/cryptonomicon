@@ -279,12 +279,6 @@ export default {
     window.addEventListener("resize", this.debouncedCalculateGraphHistory);
   },
 
-  updated() {
-    if (this.graph.length === 1) {
-      this.calculateGraphHistorySize();
-    }
-  },
-
   beforeUnmount() {
     this.tickers.forEach(({ Symbol }) => {
       unsubscribeFromTickerUpdate(Symbol, this.updatePriceForTicker);
@@ -319,6 +313,12 @@ export default {
 
     selectedTicker() {
       this.graph = [];
+    },
+
+    graph() {
+      if (this.graph.length === 1) {
+        this.$nextTick(this.calculateGraphHistorySize);
+      }
     },
   },
 
