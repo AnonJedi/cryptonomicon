@@ -13,28 +13,14 @@
 
       <template v-if="tickers.length > 0">
         <hr class="w-full border-t border-gray-600 my-4" />
-        <app-button v-if="page > 1" @click="page -= 1" class="my-4 mr-3">
-          Назад
-        </app-button>
-
-        <app-button v-if="hasNextPage" @click="page += 1" class="my-4">
-          Вперёд
-        </app-button>
-
-        <div class="max-w-xs">
-          <label for="wallet" class="block text-sm font-medium text-gray-700"
-            >Фильтр</label
-          >
-          <div class="mt-1 relative rounded-md shadow-md">
-            <input
-              v-model="filter"
-              type="text"
-              name="filter"
-              id="filter"
-              class="block w-full pr-10 border-gray-300 text-gray-900 focus:outline-none focus:ring-gray-500 focus:border-gray-500 sm:text-sm rounded-md"
-            />
-          </div>
-        </div>
+        <tickers-filters
+          :filter="filter"
+          :hasNextPage="hasNextPage"
+          :hasPrevPage="hasPrevPage"
+          @filter-change="handleFilterChange"
+          @prev-page="page -= 1"
+          @next-page="page += 1"
+        />
 
         <hr class="w-full border-t border-gray-600 my-4" />
         <dl class="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-3">
@@ -141,9 +127,9 @@ import {
   subscribeToTickerUpdate,
   unsubscribeFromTickerUpdate,
 } from "./api";
-import AppButton from "./components/AppButton.vue";
 import SearchTicker from "./components/SearchTicker.vue";
 import LoadingOverlay from "./components/LoadingOverlay.vue";
+import TickersFilters from "./components/TickersFilters.vue";
 
 const LS_RESTORE_KEY = "cryptonomicon-tickers";
 const ITEMS_PER_PAGE = 6;
@@ -151,7 +137,7 @@ const ITEMS_PER_PAGE = 6;
 export default {
   name: "App",
 
-  components: { AppButton, SearchTicker, LoadingOverlay },
+  components: { SearchTicker, LoadingOverlay, TickersFilters },
 
   data() {
     return {
@@ -259,6 +245,10 @@ export default {
 
     paginatedTickers() {
       return this.filteredTickers.slice(this.startIndex, this.endIndex);
+    },
+
+    hasPrevPage() {
+      return this.page > 1;
     },
 
     hasNextPage() {
@@ -378,6 +368,10 @@ export default {
         tickerToRemove.Symbol,
         this.updatePriceForTicker
       );
+    },
+
+    handleFilterChange(filter) {
+      this.filter = filter;
     },
   },
 };
