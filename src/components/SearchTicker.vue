@@ -61,7 +61,21 @@ export default {
     AppButton,
   },
 
-  props: ["coinList", "error"],
+  props: {
+    coinList: {
+      type: Object,
+      require: true,
+    },
+    error: {
+      type: String,
+      default: undefined,
+    },
+  },
+
+  emits: {
+    "add-ticker": (value) => typeof value === "string",
+    "reset-error": (value) => value === undefined,
+  },
 
   data() {
     return {

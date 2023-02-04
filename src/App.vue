@@ -184,7 +184,7 @@ export default {
       graph: [],
       graphHistorySize: 1,
       coinListLoading: true,
-      coinList: [],
+      coinList: {},
       suggestions: [],
       searchError: undefined,
       filter: "",
