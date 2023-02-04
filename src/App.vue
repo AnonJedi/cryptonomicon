@@ -7,7 +7,7 @@
         ref="searchTicker"
         @add-ticker="add"
         @reset-error="searchError = undefined"
-        :coinList="coinList"
+        :coin-list="coinList"
         :error="searchError"
       />
 
@@ -15,8 +15,8 @@
         <hr class="w-full border-t border-gray-600 my-4" />
         <tickers-filters
           :filter="filter"
-          :hasNextPage="hasNextPage"
-          :hasPrevPage="hasPrevPage"
+          :has-next-page="hasNextPage"
+          :has-prev-page="hasPrevPage"
           @filter-change="handleFilterChange"
           @prev-page="page -= 1"
           @next-page="page += 1"
@@ -28,7 +28,7 @@
             v-for="t in paginatedTickers"
             :key="t.Symbol"
             :ticker="t"
-            :isSelected="selectedTicker === t"
+            :is-selected="selectedTicker === t"
             @select="selectTicker"
             @delete="deleteTicker"
           />
