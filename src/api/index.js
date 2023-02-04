@@ -90,4 +90,4 @@ export function stopUpdatingPrices() {
   disconnectFromChannel();
 }
 
-export { getListOfAvailableSymbols } from "./transport";
+export { getListOfCoins } from "./transport";

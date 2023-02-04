@@ -27,48 +27,13 @@
     </div>
 
     <div class="container">
-      <section>
-        <div class="flex">
-          <div class="max-w-xs">
-            <label for="wallet" class="block text-sm font-medium text-gray-700"
-              >Тикер</label
-            >
-            <div class="mt-1 relative rounded-md shadow-md">
-              <input
-                v-model="ticker"
-                @keydown="searchError = undefined"
-                @keydown.enter="addNew"
-                @input="debouncedHandleSearchChange"
-                type="text"
-                name="wallet"
-                id="wallet"
-                class="block w-full pr-10 border-gray-300 text-gray-900 focus:outline-none focus:ring-gray-500 focus:border-gray-500 sm:text-sm rounded-md"
-                placeholder="Например DOGE"
-              />
-            </div>
-            <div
-              v-if="suggestions.length"
-              class="flex bg-white p-1 rounded-md shadow-md flex-wrap"
-            >
-              <span
-                v-for="s in suggestions"
-                :key="s.symbol"
-                @click="handleSuggestionClick(s)"
-                class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer"
-              >
-                {{ s.Symbol }}
-              </span>
-            </div>
-            <div v-if="searchError" class="text-sm text-red-600">
-              {{ searchError }}
-            </div>
-          </div>
-        </div>
-
-        <app-button @click="addNew" class="my-4"
-          ><plus-icon />Добавить</app-button
-        >
-      </section>
+      <search-ticker
+        ref="searchTicker"
+        @add-ticker="add"
+        @reset-error="searchError = undefined"
+        :coinList="coinList"
+        :error="searchError"
+      />
 
       <template v-if="tickers.length > 0">
         <hr class="w-full border-t border-gray-600 my-4" />
@@ -195,13 +160,13 @@ import debounce from "lodash.debounce";
 
 import {
   stopUpdatingPrices,
-  getListOfAvailableSymbols,
+  getListOfCoins,
   startUpdatingPrices,
   subscribeToTickerUpdate,
   unsubscribeFromTickerUpdate,
 } from "./api";
 import AppButton from "./components/AppButton.vue";
-import PlusIcon from "./components/icons/PlusIcon.vue";
+import SearchTicker from "./components/SearchTicker.vue";
 
 const LS_RESTORE_KEY = "cryptonomicon-tickers";
 const ITEMS_PER_PAGE = 6;
@@ -209,7 +174,7 @@ const ITEMS_PER_PAGE = 6;
 export default {
   name: "App",
 
-  components: { AppButton, PlusIcon },
+  components: { AppButton, SearchTicker },
 
   data() {
     return {
@@ -219,7 +184,7 @@ export default {
       graph: [],
       graphHistorySize: 1,
       coinListLoading: true,
-      availableCoins: [],
+      coinList: [],
       suggestions: [],
       searchError: undefined,
       filter: "",
@@ -228,7 +193,6 @@ export default {
   },
 
   created() {
-    this.debouncedHandleSearchChange = debounce(this.handleSearchChange, 300);
     this.debouncedCalculateGraphHistory = debounce(
       this.calculateGraphHistorySize,
       300
@@ -250,7 +214,7 @@ export default {
   },
 
   async mounted() {
-    this.availableCoins = await getListOfAvailableSymbols();
+    this.coinList = await getListOfCoins();
     this.coinListLoading = false;
 
     startUpdatingPrices();
@@ -390,15 +354,14 @@ export default {
       tickerToUpdate.notFound = notFound;
     },
 
-    addNew() {
-      const tickerName = this.ticker?.toUpperCase().trim();
+    add(ticker) {
+      const tickerName = ticker.toUpperCase().trim();
 
       if (!tickerName) {
         return;
       }
 
       if (this.tickers.some((t) => t.Symbol === tickerName)) {
-        this.handleSearchChange();
         this.searchError = "Такой тикер уже добавлен";
         return;
       }
@@ -409,8 +372,8 @@ export default {
       };
 
       subscribeToTickerUpdate(tickerName, this.updatePriceForTicker);
+      this.$refs.searchTicker.ticker = "";
       this.tickers = [...this.tickers, newTicker];
-      this.ticker = null;
       this.suggestions = [];
     },
 
@@ -437,49 +400,6 @@ export default {
       unsubscribeFromTickerUpdate(
         tickerToRemove.Symbol,
         this.updatePriceForTicker
-      );
-    },
-
-    handleSuggestionClick(newCoin) {
-      this.ticker = newCoin.Symbol;
-      this.addNew();
-    },
-
-    handleSearchChange() {
-      this.searchError = undefined;
-      const value = this.ticker.toUpperCase();
-
-      if (!value) {
-        this.suggestions = [];
-        return;
-      }
-
-      const fullMatch = [];
-      const startsWith = [];
-      const partialMatch = [];
-
-      Object.values(this.availableCoins).forEach((c) => {
-        if (c.Symbol === value) {
-          fullMatch.push(c);
-          return;
-        }
-
-        if (c.Symbol.startsWith(value)) {
-          startsWith.push(c);
-          return;
-        }
-
-        if (
-          c.Symbol.includes(value) ||
-          c.FullName.toUpperCase().includes(value)
-        ) {
-          partialMatch.push(c);
-        }
-      });
-
-      this.suggestions = [...fullMatch, ...startsWith, ...partialMatch].slice(
-        0,
-        4
       );
     },
   },

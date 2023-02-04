@@ -96,7 +96,7 @@ export function closeConnection() {
   socket?.close();
 }
 
-export function getListOfAvailableSymbols() {
+export function getListOfCoins() {
   const params = new URLSearchParams({
     api_key: process.env.VUE_APP_API_KEY,
   });
